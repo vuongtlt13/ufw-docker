@@ -63,6 +63,7 @@ function ufw-docker--allow() {
     local INSTANCE_PORT="$2"
     local PROTO="$3"
     local NETWORK="${4:-}"
+    local FROM="${5:-any}"
 
     docker inspect "$INSTANCE_NAME" &>/dev/null ||
         die "Docker instance \"$INSTANCE_NAME\" doesn't exist."
@@ -89,7 +90,7 @@ function ufw-docker--allow() {
                 if [[ -n "$NETWORK" ]] && [[ "$NETWORK" != "$INSTANCE_NETWORK" ]]; then
                     continue
                 fi
-                ufw-docker--add-rule "$INSTANCE_NAME" "$IP" "${PORT_PROTO%/*}" "${PORT_PROTO#*/}" "${INSTANCE_NETWORK}"
+                ufw-docker--add-rule "$INSTANCE_NAME" "$IP" "${PORT_PROTO%/*}" "${PORT_PROTO#*/}" "${INSTANCE_NETWORK}" "${FROM}"
                 RETVAL="$?"
             done
         fi
@@ -119,13 +120,14 @@ function ufw-docker--add-rule() {
     local PORT="$3"
     local PROTO="$4"
     local NETWORK="${5:-}"
+    local FROM="${6:-any}"
 
     declare comment
 
     echo "allow ${INSTANCE_NAME} ${PORT}/${PROTO} ${NETWORK}"
     typeset -a UFW_OPTS
     UFW_OPTS=(route allow proto "${PROTO}"
-              from any to "$INSTANCE_IP_ADDRESS")
+              from "${FROM}" to "$INSTANCE_IP_ADDRESS")
     comment="allow ${INSTANCE_NAME}"
     [[ -n "$PORT" ]] && {
         UFW_OPTS+=(port "${PORT}")
@@ -454,12 +456,16 @@ case "$ufw_action" in
             PROTO=udp
         fi
         shift || true
+        
+        FROM="${1:-any}"
+
+        shift || true
 
         NETWORK="${1:-}"
 
         INSTANCE_PORT="${INSTANCE_PORT%/*}"
 
-        "ufw-docker--$ufw_action" "$INSTANCE_NAME" "$INSTANCE_PORT" "$PROTO" "$NETWORK"
+        "ufw-docker--$ufw_action" "$INSTANCE_NAME" "$INSTANCE_PORT" "$PROTO" "$NETWORK" "$FROM"
         ;;
     service|raw-command|add-service-rule)
         shift || true
